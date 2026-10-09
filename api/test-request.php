@@ -4,19 +4,39 @@ date_default_timezone_set("Africa/Johannesburg");
 
 header("Content-Type: application/json");
 
-//raw JSON sent in the HTTP request body
+// Only allow POST requests, don't look at browser message look if success case shows up in the text file
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    http_response_code(405);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "Only POST requests are allowed"
+    ]);
+
+    exit;
+}
+
 $json = file_get_contents("php://input");
 
-//JSON into a PHP associative array
+if (empty($json)) {
+    http_response_code(400);
+
+    echo json_encode([
+        "success" => false,
+        "message" => "No request body received"
+    ]);
+
+    exit;
+}
+
 $data = json_decode($json, true);
 
-//basic check, !NB sends message to client if failed
 if ($data === null) {
     http_response_code(400);
 
     echo json_encode([
         "success" => false,
-        "message" => "Invalid or missing JSON"
+        "message" => "Invalid JSON received"
     ]);
 
     exit;
@@ -24,7 +44,6 @@ if ($data === null) {
 
 $message = $data["message"] ?? null;
 
-// Check that the expected field exists
 if ($message === null) {
     http_response_code(400);
 
@@ -36,8 +55,15 @@ if ($message === null) {
     exit;
 }
 
-// Successful response
+// SUCCESS CASE
 http_response_code(200);
+
+//simple success case logger because cannot show success case in browser(browser makes GET requests)
+file_put_contents(
+    __DIR__ . "/request-log.txt",
+    date("c") . " - Received: " . $message . PHP_EOL,
+    FILE_APPEND
+);
 
 echo json_encode([
     "success" => true,
