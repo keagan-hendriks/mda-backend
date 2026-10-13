@@ -1,0 +1,10 @@
+For everyone working with the API
+
+the way I've decided the API JSON messages on both sides should look like is:
+{
+success: boolean
+message: string
+data: {
+//what you're sending}
+
+}
