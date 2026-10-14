@@ -9,7 +9,7 @@ $logFile = __DIR__ . "/../../logs/mock-api.log";
 // Only accept PUT
 if ($_SERVER["REQUEST_METHOD"] !== "PUT") {
     //what to log in the log file
-    file_put_contents(
+    @file_put_contents( //@ sign modifies function to supress PHP warning so that it does not mess up HTTP request/responses
         $logFile,
         date("c") . "failed to update preferences, wrong HTTP method: "
         . $_SERVER["REQUEST_METHOD"]
@@ -33,7 +33,7 @@ $json = file_get_contents("php://input");
 
 if (empty($json)) {
 
-    file_put_contents(
+    @file_put_contents(
         $logFile,
         date("c") . " failed to update preferences, empty request body "
         . PHP_EOL,
@@ -53,7 +53,7 @@ $data = json_decode($json, true);
 
 if ($data === null) {
 
-    file_put_contents(
+    @file_put_contents(
         $logFile,
         date("c") . " failed to update preferences, invalid JSON received "
         . PHP_EOL,
@@ -75,7 +75,7 @@ if (
     !array_key_exists("theme", $data)
 ) {
 
-    file_put_contents(
+    @file_put_contents(
         $logFile,
         date("c") . "failed to update preferences, missing field(s)"
         . PHP_EOL,
@@ -123,7 +123,7 @@ $updatedPreferences = [
 
 //TODO: remove when done because it'll cost unnecessary resources to write to log file when we can validate in SQL db
 //Temporary server-side confirmation
-file_put_contents(
+@file_put_contents( //@ sign supresses warning because success case included warniong
     $logFile,
     date("c")
     . "succes case"
