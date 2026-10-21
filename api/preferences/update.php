@@ -1,25 +1,11 @@
+
 <?php
 
 require_once __DIR__ . "/../../includes/api-response.php";
 
-date_default_timezone_set("Africa/Johannesburg");
-
-$logFile = __DIR__ . "/../../logs/mock-api.log";
-
-// Only accept PUT
 if ($_SERVER["REQUEST_METHOD"] !== "PUT") {
-    //what to log in the log file
-    @file_put_contents( //@ sign modifies function to supress PHP warning so that it does not mess up HTTP request/responses
-        $logFile,
-        date("c") . "failed to update preferences, wrong HTTP method: "
-        . $_SERVER["REQUEST_METHOD"]
-        . PHP_EOL,
-        FILE_APPEND
-    );
-
     header("Allow: PUT");
 
-    //what PHP tells android
     sendJsonResponse(
         false,
         "Only PUT requests are allowed",
@@ -28,119 +14,124 @@ if ($_SERVER["REQUEST_METHOD"] !== "PUT") {
     );
 }
 
-// Read JSON request body
-$json = file_get_contents("php://input");
-
-if (empty($json)) {
-
-    @file_put_contents(
-        $logFile,
-        date("c") . " failed to update preferences, empty request body "
-        . PHP_EOL,
-        FILE_APPEND
-    );
-
-    sendJsonResponse(
-        false,
-        "No request body received",
-        null,
-        400
-    );
-}
-
-// Convert JSON into PHP array
-$data = json_decode($json, true);
-
-if ($data === null) {
-
-    @file_put_contents(
-        $logFile,
-        date("c") . " failed to update preferences, invalid JSON received "
-        . PHP_EOL,
-        FILE_APPEND
-    );
-
-    sendJsonResponse(
-        false,
-        "Invalid JSON received",
-        null,
-        400
-    );
-}
-
-//TODO: change validation depending on actual db logic and add db update method
-//Validate required fields
+//changed: Temporary fixed user until authentication is implemented.
+//now checks for logged in userID
 if (
-    !array_key_exists("notificationsEnabled", $data) ||
-    !array_key_exists("theme", $data)
+    !array_key_exists("userId", $data) ||
+    !is_int($data["userId"])
 ) {
-
-    @file_put_contents(
-        $logFile,
-        date("c") . "failed to update preferences, missing field(s)"
-        . PHP_EOL,
-        FILE_APPEND
-    );
-
     sendJsonResponse(
         false,
-        "Missing preference fields",
+        "userId must be an integer",
         null,
         400
     );
 }
 
-// Basic validation
-if (!is_bool($data["notificationsEnabled"])) {
+$userId = $data["userId"];
 
+// Read incoming JSON.
+$rawBody = file_get_contents("php://input");
+
+try {
+    $data = json_decode(
+        $rawBody,
+        true,
+        512,
+        JSON_THROW_ON_ERROR
+    );
+} catch (JsonException $error) {
     sendJsonResponse(
         false,
-        "notificationsEnabled must be true or false",
+        "Invalid JSON request body",
         null,
         400
     );
 }
 
-$allowedThemes = ["light", "dark"];
-
-if (!in_array($data["theme"], $allowedThemes, true)) {
-
+if (!is_array($data)) {
     sendJsonResponse(
         false,
-        "Invalid theme",
+        "Request body must be a JSON object",
         null,
         400
     );
 }
 
-
-$updatedPreferences = [
-    "userId" => 123,
-    "notificationsEnabled" => $data["notificationsEnabled"],
-    "theme" => $data["theme"]
+// Require all three preference fields as JSON booleans.
+$requiredFields = [
+    "notificationsEnabled",
+    "soundEnabled",
+    "trustedContactSharing"
 ];
 
+foreach ($requiredFields as $field) {
 
-//TODO: remove when done because it'll cost unnecessary resources to write to log file when we can validate in SQL db
-//Temporary server-side confirmation
-@file_put_contents( //@ sign supresses warning because success case included warniong
-    $logFile,
-    date("c")
-    . "succes case"
-    . "which user: user placeholder"
-    . " | notificationsEnabled="
-    . ($data["notificationsEnabled"] ? "true" : "false")
-    . " | theme="
-    . $data["theme"]
-    . PHP_EOL,
-    FILE_APPEND
-);
+    if (
+        !array_key_exists($field, $data) ||
+        !is_bool($data[$field])
+    ) {
+        sendJsonResponse(
+            false,
+            "$field must be true or false",
+            null,
+            400
+        );
+    }
+}
 
+try {
 
-//Return standardized response to Android, please always follow this pattern for response
-sendJsonResponse(
-    true,
-    "Preferences updated successfully",
-    $updatedPreferences,
-    200
-);
+    require_once __DIR__ . "/../../db_connect.php";
+    require_once __DIR__ . "/../../includes/preferences-db.php";
+
+    // Make sure the preferences row exists.
+    $existingPreferences = getPreferencesForUser(
+        $connection,
+        $userId
+    );
+
+    if ($existingPreferences === null) {
+        sendJsonResponse(
+            false,
+            "Preferences not found",
+            null,
+            404
+        );
+    }
+
+    // Save the new preferences in the database.
+    updatePreferencesForUser(
+        $connection,
+        $userId,
+        $data["notificationsEnabled"],
+        $data["soundEnabled"],
+        $data["trustedContactSharing"]
+    );
+
+    // Read back the values actually stored.
+    $updatedPreferences = getPreferencesForUser(
+        $connection,
+        $userId
+    );
+
+    sendJsonResponse(
+        true,
+        "Preferences updated successfully",
+        $updatedPreferences,
+        200
+    );
+
+} catch (Throwable $error) {
+
+    error_log(
+        "PUT preferences failed: " . $error->getMessage()
+    );
+
+    sendJsonResponse(
+        false,
+        "Internal server error",
+        null,
+        500
+    );
+}
