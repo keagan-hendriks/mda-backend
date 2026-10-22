@@ -11,7 +11,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     sendJsonResponse(false, "Only POST requests are allowed.", null, 405);
 }
 
-// Read JSON sent by the Android app.
+// Read the JSON request sent by the app.
 $input = json_decode(file_get_contents("php://input"), true);
 
 if (!is_array($input)) {
@@ -21,32 +21,18 @@ if (!is_array($input)) {
 $email = trim($input["email"] ?? "");
 $password = $input["password"] ?? "";
 
-if (
-    $email === "" ||
-    !is_string($password) ||
-    $password === ""
-) {
-    sendJsonResponse(
-        false,
-        "Email and password are required.",
-        null,
-        400
-    );
+if ($email === "" || !is_string($password) || $password === "") {
+    sendJsonResponse(false, "Email and password are required.", null, 400);
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    sendJsonResponse(
-        false,
-        "Invalid email or password.",
-        null,
-        401
-    );
+    sendJsonResponse(false, "Invalid email or password.", null, 401);
 }
 
 try {
-    // Find the account by email.
+    // Find the account and its stored password hash.
     $stmt = $connection->prepare(
-        "SELECT user_id, full_name, email, password_hash
+        "SELECT user_id, full_name, email, password_hash, created_at
          FROM users
          WHERE email = ?
          LIMIT 1"
@@ -57,32 +43,21 @@ try {
 
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
-
     $stmt->close();
 
-    // Do not reveal whether the email or password was incorrect.
-    if (
-        !$user ||
-        !password_verify($password, $user["password_hash"])
-    ) {
-        sendJsonResponse(
-            false,
-            "Invalid email or password.",
-            null,
-            401
-        );
+    // Use the same error for unknown emails and incorrect passwords.
+    if (!$user || !password_verify($password, $user["password_hash"])) {
+        sendJsonResponse(false, "Invalid email or password.", null, 401);
     }
 
-    // Generate a secure random token for the session.
+    // Generate a cryptographically secure session token.
     $token = bin2hex(random_bytes(32));
-
-    // Store only the token hash in the database.
     $tokenHash = hash("sha256", $token);
     $userId = (int) $user["user_id"];
 
+    // Store only the hash of the token, not the original token.
     $stmt = $connection->prepare(
-        "INSERT INTO auth_tokens
-            (user_id, token_hash, expires_at)
+        "INSERT INTO auth_tokens (user_id, token_hash, expires_at)
          VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR))"
     );
 
@@ -90,17 +65,18 @@ try {
     $stmt->execute();
     $stmt->close();
 
-    // Return the original token to the app once.
+    // Return camelCase fields matching Kotlin's User model.
     sendJsonResponse(
         true,
         "Login successful.",
         [
             "token" => $token,
-            "expires_in" => 3600,
+            "expiresIn" => 3600,
             "user" => [
-                "user_id" => $userId,
-                "full_name" => $user["full_name"],
-                "email" => $user["email"]
+                "userId" => $userId,
+                "fullName" => $user["full_name"],
+                "email" => $user["email"],
+                "createdAt" => $user["created_at"]
             ]
         ],
         200
