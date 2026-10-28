@@ -93,6 +93,8 @@ try {
     Assert-True (@($list.data | Where-Object { $_.medicationId -eq $medId }).Count -eq 1) 'Medications: READ list'
     $updated = Invoke-Api 'medications' 'update' 'Put' @{ medicationId = $medId; isActive = $false; notes = $null }
     Assert-True (($updated.data.isActive -eq $false) -and ($null -eq $updated.data.notes)) 'Medications: UPDATE and clear nullable notes'
+    $persisted = Invoke-Api 'medications' 'get' 'Get' $null "?medicationId=$medId"
+    Assert-True (($persisted.data.isActive -eq $false) -and ($null -eq $persisted.data.notes)) 'Medications: UPDATE persisted after fresh GET'
 
     # 3. REMINDERS
     $rem = Invoke-Api 'reminders' 'create' 'Post' @{
@@ -121,6 +123,8 @@ try {
     Assert-True (@($list.data | Where-Object { $_.logId -eq $logId }).Count -eq 1) 'Medication logs: READ list'
     $updated = Invoke-Api 'medication_logs' 'update' 'Put' @{ logId = $logId; status = 'skipped' }
     Assert-True ($updated.data.status -eq 'skipped') 'Medication logs: UPDATE'
+    $persisted = Invoke-Api 'medication_logs' 'get' 'Get' $null "?logId=$logId"
+    Assert-True ($persisted.data.status -eq 'skipped') 'Medication logs: UPDATE persisted after fresh GET'
 
     # 5. USER BADGES (composite PK)
     $ub = Invoke-Api 'user_badges' 'create' 'Post' @{ userId = $userId; badgeId = $badgeId }
