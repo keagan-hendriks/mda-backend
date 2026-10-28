@@ -99,7 +99,7 @@ Pass "Adherence reports: UPDATE"
 # -------------------------
 # Auth Tokens
 # -------------------------
-$tokenHash = ("a" * 64)
+$tokenHash = ([Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N"))
 
 $token = Invoke-Json `
     "$base/auth_tokens/create.php" `
@@ -122,7 +122,7 @@ $list = Invoke-RestMethod "$base/auth_tokens/get.php?userId=$userId"
 if ($list.data.Count -lt 1) { Fail "Auth tokens READ list" "No rows returned" }
 Pass "Auth tokens: READ list"
 
-$newTokenHash = ("b" * 64)
+$newTokenHash = ([Guid]::NewGuid().ToString("N") + [Guid]::NewGuid().ToString("N"))
 
 $upd = Invoke-Json `
     "$base/auth_tokens/update.php" `
