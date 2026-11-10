@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$base = "http://localhost/mda_backend/api"
+$base = "http://localhost:8080/api"
 
 function Pass($name) {
     Write-Host "[PASS] $name" -ForegroundColor Green
