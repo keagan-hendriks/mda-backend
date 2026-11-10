@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.idea
+.vscode
+*.log
+api/request-log.txt
+SourceCode
